@@ -1,39 +1,50 @@
+OS := $(shell uname)
+LINUX = Linux
+WINDOWS = Windows
+
 ASM_FILES = src/functions.asm
 C_FILES = src/main.c
-EXECUTABLE_NAME = integrator
+
+ifeq ($(OS),$(LINUX))
+	EXECUTABLE_NAME = integrator
+	NASM_SYSTEM = elf32
+endif
+ifeq ($(OS),$(WINDOWS))
+	EXECUTABLE_NAME = integrator.exe
+	NASM_SYTEM = win32
+endif
+
 
 
 target:
-	@mkdir target
+	$(shell mkdir target)
 
 
-all: target
+compile_asm: target $(ASM_FILES)
 	$(foreach \
 		file,\
 		$(ASM_FILES),\
 		$(shell nasm \
-			-f win32 \
+			-f $(NASM_SYSTEM) \
 			$(file) \
-			-o $(addprefix target/,$(call path_to_name,$(file)).o)))
+			-o $(addprefix target/,$(call path_to_name,$(file)).obj)))
 	
-	$(foreach \
-		file,\
-		$(C_FILES),\
-		$(shell gcc \
-			-m32 \
-			-Wall \
-			-Wextra \
-			$(file) \
-			-o $(addprefix target/,$(call path_to_name,$(file))).o))
-	
+
+compile_c: compile_asm $(C_FILES)
 	$(shell gcc \
+		-Wall \
+		-Wextra \
 		-m32 \
-		$(wildcard target/*.o) \
-		-o target/$(EXECUTABLE_NAME).exe)
+		$(wildcard target/*.obj) \
+		$(C_FILES) \
+		-o $(addprefix target/,$(EXECUTABLE_NAME)))
+	
+
+all: compile_c
 
 
 run: all
-	./target/$(EXECUTABLE_NAME).exe
+	@./target/$(EXECUTABLE_NAME)
 
 
 clean:

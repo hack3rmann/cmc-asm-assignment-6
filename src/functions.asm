@@ -1,4 +1,3 @@
-
 section .rodata
     fp_constants:
         .neg_two                        dd -2.0
@@ -72,6 +71,7 @@ f2:
 ; /// Calculates (d/dx) f2(x) = -2
 ; #[cdecl]
 ; fn f2_prime(value: f32) -> f32
+global f2_prime
 f2_prime:
     push ebp
     mov ebp, esp
@@ -89,6 +89,7 @@ f2_prime:
 ; /// Calculates f3(x) = 1 / (2 - x) + 6
 ; #[cdecl]
 ; fn f3(value: f32) -> f32
+global f3
 f3:
     push ebp
     mov ebp, esp
@@ -110,6 +111,7 @@ f3:
 ; /// Calculates (d/dx) f3(x) = -1 / (2 - x)**2
 ; #[cdecl]
 ; fn f3_prime(value: f32) -> f32
+global f3_prime
 f3_prime:
     push ebp
     mov ebp, esp
