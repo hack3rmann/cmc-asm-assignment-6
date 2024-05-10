@@ -108,7 +108,7 @@ f3:
     ret
 
 
-; /// Calculates (d/dx) f3(x) = -1 / (2 - x)**2
+; /// Calculates (d/dx) f3(x) = 1 / (2 - x)**2
 ; #[cdecl]
 ; fn f3_prime(value: f32) -> f32
 global f3_prime
@@ -119,8 +119,8 @@ f3_prime:
     .argbase                            equ 8
     .value                              equ .argbase+0
 
-    ; return -1 / ((2 - value) * (2 - value))
-    fld dword [fp_constants.neg_one]
+    ; return 1 / ((2 - value) * (2 - value))
+    fld1
     fld dword [fp_constants.two]
     fsub dword [ebp+.value]
     fld dword [fp_constants.two]

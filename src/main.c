@@ -5,22 +5,38 @@
 
 #include "types.h"
 #include "args.h"
+#include "functions.h"
 
 
-#define f32_EPS 2e-4
+#define f32_EPS 1e-3
 
+
+
+/// Smooth function f(x)
 typedef f32 (*SmoothFn)(f32);
 
 
+
+/// Linear interpilation for [`f32`]
 f32 f32_lerp(f32 left, f32 right, f32 mix) {
     return (1.0 - mix) * left + mix * right;
 }
 
 
+
+typedef enum DerivativesSign {
+    DerivativesSign_Same,
+    DerivativesSign_Different,
+} DerivativesSign;
+
+
+
+/// Root finding configuration
 typedef struct RootFindCfg {
     f32 eps;
     f32 segment_start;
     f32 segment_end;
+    DerivativesSign derivetives_sign;
 } RootFindCfg;
 
 #define RootFindCfg_DEFAULT ((RootFindCfg) { \
@@ -30,6 +46,8 @@ typedef struct RootFindCfg {
 })
 
 
+
+/// Information about esimated root.
 typedef struct Root {
     f32 value;
     usize n_steps;
@@ -44,23 +62,37 @@ Root Root_of(
     usize n_steps = 0;
 
     while (fabs(a - b) >= cfg.eps) {
+        n_steps += 1;
+
         f32 const funcs_diff_a = f(a) - g(a);
         f32 const funcs_diff_b = f(b) - g(b);
+        f32 const primes_diff_a = dfdx(a) - dgdx(a);
         f32 const primes_diff_b = dfdx(b) - dgdx(b);
 
-        a -= (b - a) / (funcs_diff_b - funcs_diff_a) * funcs_diff_a;
-        b -= funcs_diff_b / primes_diff_b;
+        switch (cfg.derivetives_sign) {
+        case DerivativesSign_Same: {
+            a -= (b - a) / (funcs_diff_b - funcs_diff_a) * funcs_diff_a;
+            b -= funcs_diff_b / primes_diff_b;
+        } break;
 
-        n_steps += 1;
+        case DerivativesSign_Different: {
+            a -= funcs_diff_a / primes_diff_a;
+            b -= (b - a) / (funcs_diff_b - funcs_diff_a) * funcs_diff_b;
+        } break;
+        }
+
+        printf("a = %f, b = %f\n", a, b);
     }
 
     return (Root) {
-        .value = 0.5 * (b - a),
+        .value = 0.5 * (a + b),
         .n_steps = n_steps,
     };
 }
 
 
+
+/// Integram esimator
 f32 estimate_integral(
     SmoothFn f, f32 segment_left, f32 segment_right, f32 dx
 ) {
@@ -87,6 +119,7 @@ f32 estimate_integral(
 
     return sum;
 }
+
 
 
 i32 main(i32 argc, char** argv) {
@@ -120,33 +153,43 @@ i32 main(i32 argc, char** argv) {
         return EXIT_SUCCESS;
     }
 
-    VecStr const* intersection_values
-        = Args_get_flag_values(&args, &args_info, str("intersection"));
+    Root const intersection_12
+        = Root_of(f1, f2, f1_prime, f2_prime, (RootFindCfg) {
+            .eps = f32_EPS,
+            .segment_start = 6.0,
+            .segment_end = 6.5,
+            .derivetives_sign = DerivativesSign_Different,
+        });
+    
+    Root const intersection_23
+        = Root_of(f2, f3, f2_prime, f3_prime, (RootFindCfg) {
+            .eps = f32_EPS,
+            .segment_start = 4.0,
+            .segment_end = 4.5,
+            .derivetives_sign = DerivativesSign_Different,
+        });
 
-    if (null != intersection_values) {
-        printf("intersection flag values readed:\n");
+    Root const intersection_13
+        = Root_of(f1, f3, f1_prime, f3_prime, (RootFindCfg) {
+            .eps = f32_EPS,
+            .segment_start = 2.1,
+            .segment_end = 2.2,
+            .derivetives_sign = DerivativesSign_Same,
+        });
 
-        for (usize i = 0; i < intersection_values->len; ++i) {
-            printf("  - %s\n", intersection_values->ptr[i].ptr);
-        }
+    if (Args_contains_flag(&args, &args_info, str("intersection"))) {
+        printf("Estimated functions intersections:\n");
+        printf("  f1 with f2: x = %f\n", intersection_12.value);
+        printf("  f2 with f3: x = %f\n", intersection_23.value);
+        printf("  f1 with f3: x = %f\n", intersection_13.value);
     }
 
-    VecStr const* count_values
-        = Args_get_flag_values(&args, &args_info, str("count"));
-
-    if (null != count_values) {
-        printf("count flag values readed:\n");
-
-        for (usize i = 0; i < count_values->len; ++i) {
-            printf("  - %s\n", count_values->ptr[i].ptr);
-        }
+    if (Args_contains_flag(&args, &args_info, str("count"))) {
+        printf("Required numbers of iterations to estimate intersections:\n");
+        printf("  f1 with f2: %zu\n", intersection_12.n_steps);
+        printf("  f2 with f3: %zu\n", intersection_23.n_steps);
+        printf("  f1 with f3: %zu\n", intersection_13.n_steps);
     }
-
-    bool const do_print_points
-        = Args_contains_flag(&args, &args_info, str("intersection"));
-
-    bool const do_print_n_iterations
-        = Args_contains_flag(&args, &args_info, str("count"));
 
     Args_drop(&args);
     ArgsInfo_drop(&args_info);
