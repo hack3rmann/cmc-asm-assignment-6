@@ -2,6 +2,7 @@
 #define _INTEGRATOR_UTIL_H_
 
 #include "types.h"
+#include "string.h"
 
 
 
@@ -21,6 +22,12 @@
 
 /// Drop implementation for types without drop functionality.
 void DropFn_noop(AddrMut ptr);
+
+/// Parses string to `usize`.
+usize usize_parse(str value);
+
+/// Parses string to `f32`.
+f32 f32_parse(str value);
 
 
 

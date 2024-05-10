@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "args.h"
+#include "util.h"
 
 
 
@@ -11,21 +12,27 @@ ArgsInfo ArgsInfo_new(str program_name, str program_description) {
         .flags = VecStr_DEFAULT,
         .short_flags = VecChar_DEFAULT,
         .descriptions = VecStr_DEFAULT,
+        .arg_names = Vec_new(sizeof(FlagValues), DropFn_noop),
     };
+
+    FlagValues help_args = FlagValues_EMPTY;
 
     VecStr_push(&result.flags, str("help"));
     VecChar_push(&result.short_flags, 'h');
     VecStr_push(&result.descriptions, str("Print help"));
+    Vec_push(&result.arg_names, &help_args);
 
     return result;
 }
 
 void ArgsInfo_add_flag(
-    ArgsInfo* self, str flag, char short_flag, str description
+    ArgsInfo* self, str flag, char short_flag, str description,
+    FlagValues values
 ) {
     VecStr_push(&self->flags, flag);
     VecChar_push(&self->short_flags, short_flag);
     VecStr_push(&self->descriptions, description);
+    Vec_push(&self->arg_names, &values);
 }
 
 char ArgsInfo_get_short_flag_from_long(ArgsInfo const* self, str flag) {
@@ -72,6 +79,7 @@ void ArgsInfo_drop(ArgsInfo* self) {
     VecStr_drop(&self->flags);
     VecChar_drop(&self->short_flags);
     VecStr_drop(&self->descriptions);
+    Vec_drop(&self->arg_names);
 }
 
 void ArgsInfo_print_help(ArgsInfo const* self) {
@@ -84,9 +92,16 @@ void ArgsInfo_print_help(ArgsInfo const* self) {
         usize max_len = 0;
 
         for (usize i = 0; i < self->flags.len; ++i) {
-            if (max_len < self->flags.ptr[i].len) {
-                max_len = self->flags.ptr[i].len;
+            usize len = self->flags.ptr[i].len;
+
+            FlagValues const* values
+                = &Vec_get(FlagValues, &self->arg_names, i);
+
+            for (usize j = 0; j < values->n_arg_names; ++j) {
+                len += values->arg_names[j].len + 3;
             }
+
+            max_len = max(max_len, len);
         }
 
         max_len;
@@ -94,7 +109,7 @@ void ArgsInfo_print_help(ArgsInfo const* self) {
 
     for (usize i = 0; i < self->flags.len; ++i) {
         char const short_flag = self->short_flags.ptr[i];
-        usize const n_spaces = max_flag_len - self->flags.ptr[i].len + 1;
+        usize n_spaces = max_flag_len - self->flags.ptr[i].len + 1;
 
         if (ArgsInfo_NO_SHORT_FLAG != short_flag) {
             printf("  -%c, ", short_flag);
@@ -103,6 +118,14 @@ void ArgsInfo_print_help(ArgsInfo const* self) {
         }
 
         printf("--%s", self->flags.ptr[i].ptr);
+
+        FlagValues const* values
+            = &Vec_get(FlagValues, &self->arg_names, i);
+
+        for (usize j = 0; j < values->n_arg_names; ++j) {
+            printf(" <%s>", values->arg_names[j].ptr);
+            n_spaces -= values->arg_names[j].len + 3;
+        }
 
         for (usize i = 0; i < n_spaces; ++i) {
             putchar(' ');

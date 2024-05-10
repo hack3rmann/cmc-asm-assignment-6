@@ -7,6 +7,16 @@
 
 
 
+typedef struct FlagValues {
+    str const* arg_names;
+    usize n_arg_names;
+} FlagValues;
+
+#define FlagValues_EMPTY ((FlagValues) { .arg_names = null, .n_arg_names = 0 })
+#define FlagValues_DEFAULT FlagValues_EMPTY
+
+
+
 /// CLI argument information needed to parse them.
 typedef struct ArgsInfo {
     str program_name;
@@ -14,6 +24,7 @@ typedef struct ArgsInfo {
     VecStr flags;
     VecChar short_flags;
     VecStr descriptions;
+    Vec arg_names;
 } ArgsInfo;
 
 /// str("help") shorthand
@@ -32,7 +43,8 @@ ArgsInfo ArgsInfo_new(str program_name, str program_description);
 /// `short_flag` can be set to `ArgsInfo_NO_SHORT_FLAG` to exclude
 /// it from parsing.
 void ArgsInfo_add_flag(
-    ArgsInfo* self, str flag, char short_flag, str description
+    ArgsInfo* self, str flag, char short_flag, str description,
+    FlagValues values
 );
 
 /// Checks if long flag is in parser info.

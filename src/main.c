@@ -6,6 +6,7 @@
 #include "types.h"
 #include "args.h"
 #include "functions.h"
+#include "util.h"
 
 
 #define f32_EPS 1e-3
@@ -80,8 +81,6 @@ Root Root_of(
             b -= (b - a) / (funcs_diff_b - funcs_diff_a) * funcs_diff_b;
         } break;
         }
-
-        printf("a = %f, b = %f\n", a, b);
     }
 
     return (Root) {
@@ -133,7 +132,8 @@ i32 main(i32 argc, char** argv) {
         &args_info,
         str("intersection"),
         'i',
-        str("Prints x values of functions intersection points")
+        str("Prints x values of functions intersection points"),
+        FlagValues_EMPTY
     );
 
     ArgsInfo_add_flag(
@@ -141,7 +141,44 @@ i32 main(i32 argc, char** argv) {
         str("count"),
         'c',
         str("Prints number of iterations are performed "
-            "to estimate intersection points")
+            "to estimate intersection points"),
+        FlagValues_EMPTY
+    );
+
+    static str intersection_values_names[] = {
+        str("F"), str("G"), str("LEFT"), str("RIGHT"), str("EPS"),
+    };
+
+    ArgsInfo_add_flag(
+        &args_info,
+        str("test-intersections"),
+        ArgsInfo_NO_SHORT_FLAG,
+        str("Tests function intersection algorythm. "
+            "F ang G are 1, 2, 3, F != G - functions to test. LEFT and RIGHT "
+            "are left and right segment boundaries to find root on. "
+            "EPS != 0 is accuracy of the algorithm"),
+        (FlagValues) {
+            .arg_names = intersection_values_names,
+            .n_arg_names = 5,
+        }
+    );
+
+    static str integration_values_names[] = {
+        str("F"), str("LEFT"), str("RIGHT"), str("EPS"),
+    };
+
+    ArgsInfo_add_flag(
+        &args_info,
+        str("test-integration"),
+        ArgsInfo_NO_SHORT_FLAG,
+        str("Tests function integration algorythm. "
+            "F is 1, 2, 3 - function to integrate. LEFT and RIGHT "
+            "are left and right boundaries of the segment to integrate on. "
+            "EPS != 0 is accuracy of the algorithm"),
+        (FlagValues) {
+            .arg_names = integration_values_names,
+            .n_arg_names = 4,
+        }
     );
 
     Args args = Args_parse(&args_info, argc, argv);
@@ -177,6 +214,81 @@ i32 main(i32 argc, char** argv) {
             .derivetives_sign = DerivativesSign_Same,
         });
 
+    VecStr const* test_intersection_values
+        = Args_get_flag_values(&args, &args_info, str("test-intersections"));
+    
+    if (null != test_intersection_values) {
+        assert(5 == test_intersection_values->len && "5 arguments expected\n");
+
+        usize const f_index = usize_parse(test_intersection_values->ptr[0]) - 1;
+        usize const g_index = usize_parse(test_intersection_values->ptr[1]) - 1;
+        f32 const left = f32_parse(test_intersection_values->ptr[2]);
+        f32 const right = f32_parse(test_intersection_values->ptr[3]);
+        f32 const eps = f32_parse(test_intersection_values->ptr[4]);
+
+        assert(f_index < 3
+            && g_index < 3
+            && f_index != g_index
+            && "F and G should be 1, 2, 3 and F != G\n");
+        
+        assert(left <= right && "LEFT should be not greater than RIGHT\n");
+
+        assert(eps > 0.0 && "EPS should be greater than zero\n");
+
+        SmoothFn const functions[] = { f1, f2, f3 };
+        SmoothFn const derivatives[] = { f1_prime, f2_prime, f3_prime };
+
+        Root const root = Root_of(
+            functions[f_index],
+            functions[g_index],
+            derivatives[f_index],
+            derivatives[g_index],
+            (RootFindCfg) {
+                .derivetives_sign = DerivativesSign_Same,
+                .eps = eps,
+                .segment_start = left,
+                .segment_end = right,
+            }
+        );
+
+        printf(
+            "Found root x = %f with %zu iterations.", root.value, root.n_steps
+        );
+
+        Args_drop(&args);
+        ArgsInfo_drop(&args_info);
+
+        return EXIT_SUCCESS;
+    }
+
+    VecStr const* test_integration_values
+        = Args_get_flag_values(&args, &args_info, str("test-integration"));
+    
+    if (null != test_integration_values) {
+        assert(4 == test_integration_values->len && "4 arguments expected\n");
+
+        usize const f_index = usize_parse(test_integration_values->ptr[0]) - 1;
+        f32 const left = f32_parse(test_integration_values->ptr[1]);
+        f32 const right = f32_parse(test_integration_values->ptr[2]);
+        f32 const eps = f32_parse(test_integration_values->ptr[3]);
+
+        assert(f_index < 3 && "F should be one of 1, 2, 3\n");
+        assert(left <= right && "LEFT should be not greater than RIGHT\n");
+        assert(eps > 0.0 && "EPS should be greater than zero\n");
+
+        SmoothFn const functions[] = { f1, f2, f3 };
+
+        f32 const area
+            = estimate_integral(functions[f_index], left, right, eps);
+
+        printf("Estimated area: %f\n", area);
+
+        Args_drop(&args);
+        ArgsInfo_drop(&args_info);
+
+        return EXIT_SUCCESS;
+    }
+
     if (Args_contains_flag(&args, &args_info, str("intersection"))) {
         printf("Estimated functions intersections:\n");
         printf("  f1 with f2: x = %f\n", intersection_12.value);
@@ -190,6 +302,22 @@ i32 main(i32 argc, char** argv) {
         printf("  f2 with f3: %zu\n", intersection_23.n_steps);
         printf("  f1 with f3: %zu\n", intersection_13.n_steps);
     }
+
+    f32 const area1 = estimate_integral(
+        f1, intersection_13.value, intersection_12.value, f32_EPS
+    );
+
+    f32 const area2 = estimate_integral(
+        f2, intersection_23.value, intersection_12.value, f32_EPS
+    );
+
+    f32 const area3 = estimate_integral(
+        f3, intersection_13.value, intersection_23.value, f32_EPS
+    );
+
+    f32 const area = area3 + area2 - area1;
+
+    printf("Estimated area: %f\n", area);
 
     Args_drop(&args);
     ArgsInfo_drop(&args_info);
