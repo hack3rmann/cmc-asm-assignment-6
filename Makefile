@@ -3,7 +3,7 @@ LINUX = Linux
 WINDOWS = Windows
 
 ASM_FILES = src/functions.asm
-C_FILES = src/main.c
+C_FILES = src/main.c src/args.c
 
 ifeq ($(OS),$(LINUX))
 	EXECUTABLE_NAME = integrator

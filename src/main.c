@@ -1,7 +1,9 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <math.h>
+
 #include "types.h"
+#include "args.h"
 
 
 #define f32_EPS 2e-4
@@ -58,7 +60,6 @@ Root Root_of(
 }
 
 
-
 f32 estimate_integral(
     SmoothFn f, f32 segment_left, f32 segment_right, f32 dx
 ) {
@@ -87,7 +88,45 @@ f32 estimate_integral(
 }
 
 
-i32 main(void) {
+i32 main(i32 argc, char** argv) {
+    ArgsInfo args_info = ArgsInfo_new(
+        str("integrator"),
+        str("integrator is a program that calculates area bounded "
+            "by f1(x) = ln(x), f2(x) = -2x + 14, f3(x) = 1 / (2 - x) + 6.")
+    );
+
+    ArgsInfo_add_flag(
+        &args_info,
+        str("intersection"),
+        'i',
+        str("Prints x values of functions intersection points")
+    );
+
+    ArgsInfo_add_flag(
+        &args_info,
+        str("count"),
+        'c',
+        str("Prints number of iterations are performed "
+            "to estimate intersection points")
+    );
+
+    Args args = Args_parse(&args_info, argc, argv);
+
+    if (Args_contains_help_flag(&args)) {
+        ArgsInfo_print_help(&args_info);
+        Args_drop(&args);
+        ArgsInfo_drop(&args_info);
+        return EXIT_SUCCESS;
+    }
+
+    bool const do_print_points
+        = Args_contains_flag(&args, &args_info, str("intersection"));
+
+    bool const do_print_n_iterations
+        = Args_contains_flag(&args, &args_info, str("count"));
+
+    Args_drop(&args);
+    ArgsInfo_drop(&args_info);
 
     return EXIT_SUCCESS;
 }

@@ -18,6 +18,11 @@ typedef float f32;
 typedef double f64;
 typedef size_t usize;
 typedef ptrdiff_t isize;
+typedef _Bool bool;
+
+#define null ((void*) 0)
+#define true ((bool) 1)
+#define false ((bool) 0)
 
 
 
