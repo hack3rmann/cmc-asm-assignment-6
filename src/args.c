@@ -1,76 +1,6 @@
 #include <stdlib.h>
-#include <string.h>
 #include <stdio.h>
 #include "args.h"
-
-
-
-str str_from_ptr(char* ptr) {
-    return (str) {
-        .ptr = ptr,
-        .len = strlen(ptr),
-    };
-}
-
-Ordering str_cmp(str self, str other) {
-    return strcmp(self.ptr, other.ptr);
-}
-
-bool str_eq(str self, str other) {
-    return Ordering_Equal == str_cmp(self, other);
-}
-
-
-
-VecStr VecStr_with_capacity(usize cap) {
-    return (VecStr) {
-        .ptr = malloc(sizeof(str) * cap),
-        .len = 0,
-        .cap = cap,
-    };
-}
-
-void VecStr_push(VecStr* self, str value) {
-    if (0 == self->cap) {
-        self->cap = 1;
-        self->ptr = malloc(sizeof(*self->ptr) * self->cap);
-    } else if (self->cap == self->len) {
-        self->cap += self->cap / 2 + 1;
-        self->ptr = realloc(self->ptr, sizeof(*self->ptr) * self->cap);
-    }
-
-    self->ptr[self->len++] = value;
-}
-
-void VecStr_drop(VecStr* self) {
-    free(self->ptr);
-}
-
-
-
-VecChar VecChar_with_capacity(usize cap) {
-    return (VecChar) {
-        .ptr = malloc(sizeof(char) * cap),
-        .len = 0,
-        .cap = cap,
-    };
-}
-
-void VecChar_push(VecChar* self, char value) {
-    if (0 == self->cap) {
-        self->cap = 16;
-        self->ptr = malloc(sizeof(*self->ptr) * self->cap);
-    } else if (self->cap == self->len) {
-        self->cap += self->cap / 2 + 1;
-        self->ptr = realloc(self->ptr, sizeof(*self->ptr) * self->cap);
-    }
-
-    self->ptr[self->len++] = value;
-}
-
-void VecChar_drop(VecChar* self) {
-    free(self->ptr);
-}
 
 
 
@@ -184,81 +114,117 @@ void ArgsInfo_print_help(ArgsInfo const* self) {
 
 
 
+void Flag_drop(Flag* self) {
+    VecStr_drop(&self->values);
+}
+
+
+
 static void _print_run_program_hint(void) {
-    fprintf(stderr, "Try run program with --help flag.\n");
+    fprintf(stderr, "HELP: Try to run program with --help flag.\n");
 }
 
 static void _print_unknown_flag_error(str flag) {
-    fprintf(stderr, "ERROR: unknown flag --%s\n\n", flag.ptr);
+    fprintf(stderr, "ERROR: unknown flag --%s.\n\n", flag.ptr);
     _print_run_program_hint();
 }
 
 static void _print_unknown_short_flag_error(char flag) {
-    fprintf(stderr, "ERROR: unknown flag -%c\n\n", flag);
+    fprintf(stderr, "ERROR: unknown flag -%c.\n\n", flag);
     _print_run_program_hint();
 }
 
 Args Args_parse(ArgsInfo const* info, i32 argc, char** argv) {
-    if (argc < 0) {
-        fprintf(stderr, "ERROR: Invalid argc %d < 0\n", argc);
+    if (argc < 1) {
+        fprintf(stderr, "Invalid argc = %d < 0\n", argc);
+        _print_run_program_hint();
         exit(EXIT_FAILURE);
     }
 
     usize const n_args = (usize) argc;
 
-    VecStr flags = VecStr_DEFAULT;
-    VecChar short_flags = VecChar_DEFAULT;
-
-    // Skip program name argument
+    Vec short_flag_series = Vec_new(sizeof(Flag), DropFn_of(Flag));
+    Vec long_flags_series = Vec_new(sizeof(Flag), DropFn_of(Flag));
+    
+    Vec* last_series = null;
+    
+    // i = 1 to skip program path
     for (usize i = 1; i < n_args; ++i) {
-        usize const arg_len = strlen(argv[i]);
+        str const arg = str_from_ptr(argv[i]);
 
-        if (arg_len < 2 || '-' != argv[i][0]) {
-            fprintf(stderr, "ERROR: Invalid flag %s\n\n", argv[i]);
-            _print_run_program_hint();
-            exit(EXIT_FAILURE);
+        if (arg.len < 2 || '-' != arg.ptr[0]) {
+            if (null == last_series) {
+                fprintf(
+                    stderr,
+                    "ERROR: unexpected value '%s' before any flag.\n",
+                    arg.ptr
+                );
+                exit(EXIT_SUCCESS);
+            } else {
+                Flag* flag = &Vec_get(Flag, last_series, last_series->len - 1);
+
+                VecStr_push(&flag->values, arg);
+
+                continue;
+            }
         }
 
-        bool const flag_is_long = '-' == argv[i][1];
+        bool const flag_is_long = '-' == arg.ptr[1];
 
         if (flag_is_long) {
-            str const flag = str_from_ptr(argv[i] + 2);
+            Flag flag = {
+                .name = str_slice(arg, 2, usize_MAX),
+                .values = VecStr_DEFAULT,
+            };
 
-            if (!ArgsInfo_contains_flag(info, flag)) {
-                _print_unknown_flag_error(flag);
+            if (!ArgsInfo_contains_flag(info, flag.name)) {
+                _print_unknown_flag_error(flag.name);
                 exit(EXIT_FAILURE);
             }
 
-            VecStr_push(&flags, flag);
-        } else {
-            str const short_flag_string = str_from_ptr(argv[i] + 1);
+            Vec_push(&long_flags_series, &flag);
 
-            for (usize j = 0; j < short_flag_string.len; ++j) {
-                if (!ArgsInfo_contains_short_flag(info, short_flag_string.ptr[j])) {
-                    _print_unknown_short_flag_error(short_flag_string.ptr[j]);
+            last_series = &long_flags_series;
+        } else {
+            Flag flag = {
+                .name = str_slice(arg, 1, usize_MAX),
+                .values = VecStr_DEFAULT,
+            };
+
+            for (usize j = 0; j < flag.name.len; ++j) {
+                if (!ArgsInfo_contains_short_flag(info, flag.name.ptr[j])) {
+                    _print_unknown_short_flag_error(flag.name.ptr[j]);
                     exit(EXIT_FAILURE);
                 }
-
-                VecChar_push(&short_flags, short_flag_string.ptr[j]);
             }
+
+            Vec_push(&short_flag_series, &flag);
+
+            last_series = &short_flag_series;
         }
     }
 
     return (Args) {
-        .flags = flags,
-        .short_flags = short_flags,
+        .short_flags_series = short_flag_series,
+        .long_flags_series = long_flags_series,
     };
 }
 
 bool Args_contains_help_flag(Args const* self) {
-    for (usize i = 0; i < self->short_flags.len; ++i) {
-        if ('h' == self->short_flags.ptr[i]) {
-            return true;
+    for (usize i = 0; i < self->short_flags_series.len; ++i) {
+        Flag const* flag = &Vec_get(Flag, &self->short_flags_series, i);
+
+        for (usize j = 0; j < flag->name.len; ++j) {
+            if ('h' == flag->name.ptr[j]) {
+                return true;
+            }
         }
     }
 
-    for (usize i = 0; i < self->flags.len; ++i) {
-        if (str_eq(str("help"), self->flags.ptr[i])) {
+    for (usize i = 0; i < self->long_flags_series.len; ++i) {
+        Flag const* flag = &Vec_get(Flag, &self->long_flags_series, i);
+
+        if (str_eq(str("help"), flag->name)) {
             return true;
         }
     }
@@ -266,22 +232,28 @@ bool Args_contains_help_flag(Args const* self) {
     return false;
 }
 
-bool Args_contains_flag(Args const* self, ArgsInfo const* info, str flag) {
-    if (!ArgsInfo_contains_flag(info, flag)) {
+bool Args_contains_flag(Args const* self, ArgsInfo const* info, str name) {
+    if (!ArgsInfo_contains_flag(info, name)) {
         return false;
     }
 
-    for (usize i = 0; i < self->flags.len; ++i) {
-        if (str_eq(flag, self->flags.ptr[i])) {
+    for (usize i = 0; i < self->long_flags_series.len; ++i) {
+        Flag const* flag = &Vec_get(Flag, &self->long_flags_series, i);
+
+        if (str_eq(name, flag->name)) {
             return true;
         }
     }
 
-    char const short_flag = ArgsInfo_get_short_flag_from_long(info, flag);
+    char const short_flag = ArgsInfo_get_short_flag_from_long(info, name);
 
-    for (usize i = 0; i < self->short_flags.len; ++i) {
-        if (short_flag == self->short_flags.ptr[i]) {
-            return true;
+    for (usize i = 0; i < self->short_flags_series.len; ++i) {
+        Flag const* flag = &Vec_get(Flag, &self->short_flags_series, i);
+
+        for (usize j = 0; j < flag->name.len; ++j) {
+            if (short_flag == flag->name.ptr[j]) {
+                return true;
+            }
         }
     }
 
@@ -289,22 +261,28 @@ bool Args_contains_flag(Args const* self, ArgsInfo const* info, str flag) {
 }
 
 bool Args_contains_short_flag(
-    Args const* self, ArgsInfo const* info, char const short_flag
+    Args const* self, ArgsInfo const* info, char short_flag
 ) {
     if (!ArgsInfo_contains_short_flag(info, short_flag)) {
         return false;
     }
 
-    for (usize i = 0; i < self->short_flags.len; ++i) {
-        if (short_flag == self->short_flags.ptr[i]) {
-            return true;
+    for (usize i = 0; i < self->short_flags_series.len; ++i) {
+        Flag const* flag = &Vec_get(Flag, &self->short_flags_series, i);
+
+        for (usize j = 0; j < flag->name.len; ++j) {
+            if (short_flag == flag->name.ptr[j]) {
+                return true;
+            }
         }
     }
 
-    str const flag = ArgsInfo_get_long_flag_from_short(info, short_flag);
+    str const name = ArgsInfo_get_long_flag_from_short(info, short_flag);
 
-    for (usize i = 0; i < self->flags.len; ++i) {
-        if (str_eq(flag, self->flags.ptr[i])) {
+    for (usize i = 0; i < self->long_flags_series.len; ++i) {
+        Flag const* flag = &Vec_get(Flag, &self->long_flags_series, i);
+
+        if (str_eq(name, flag->name)) {
             return true;
         }
     }
@@ -312,7 +290,39 @@ bool Args_contains_short_flag(
     return false;
 }
 
+VecStr const* Args_get_flag_values(
+    Args const* self, ArgsInfo const* info, str name
+) {
+    if (!ArgsInfo_contains_flag(info, name)) {
+        return null;
+    }
+
+    for (usize i = 0; i < self->long_flags_series.len; ++i) {
+        Flag const* flag = &Vec_get(Flag, &self->long_flags_series, i);
+
+        if (str_eq(name, flag->name)) {
+            return &flag->values;
+        }
+    }
+
+    char const short_flag = ArgsInfo_get_short_flag_from_long(info, name);
+
+    for (usize i = 0; i < self->short_flags_series.len; ++i) {
+        Flag const* flag = &Vec_get(Flag, &self->short_flags_series, i);
+
+        if (0 == flag->name.len) {
+            continue;
+        }
+
+        if (short_flag == flag->name.ptr[flag->name.len - 1]) {
+            return &flag->values;
+        }
+    }
+
+    return null;
+}
+
 void Args_drop(Args* self) {
-    VecStr_drop(&self->flags);
-    VecChar_drop(&self->short_flags);
+    Vec_drop(&self->short_flags_series);
+    Vec_drop(&self->long_flags_series);
 }

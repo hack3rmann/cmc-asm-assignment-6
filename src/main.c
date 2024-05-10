@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <math.h>
+#include <stdio.h>
 
 #include "types.h"
 #include "args.h"
@@ -117,6 +118,28 @@ i32 main(i32 argc, char** argv) {
         Args_drop(&args);
         ArgsInfo_drop(&args_info);
         return EXIT_SUCCESS;
+    }
+
+    VecStr const* intersection_values
+        = Args_get_flag_values(&args, &args_info, str("intersection"));
+
+    if (null != intersection_values) {
+        printf("intersection flag values readed:\n");
+
+        for (usize i = 0; i < intersection_values->len; ++i) {
+            printf("  - %s\n", intersection_values->ptr[i].ptr);
+        }
+    }
+
+    VecStr const* count_values
+        = Args_get_flag_values(&args, &args_info, str("count"));
+
+    if (null != count_values) {
+        printf("count flag values readed:\n");
+
+        for (usize i = 0; i < count_values->len; ++i) {
+            printf("  - %s\n", count_values->ptr[i].ptr);
+        }
     }
 
     bool const do_print_points
