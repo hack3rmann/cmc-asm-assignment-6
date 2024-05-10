@@ -1,3 +1,5 @@
+//! Rust-like type aliases
+
 #ifndef _INTEGRATOR_TYPES_H_
 #define _INTEGRATOR_TYPES_H_
 

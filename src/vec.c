@@ -31,39 +31,6 @@ void VecStr_drop(VecStr* self) {
 
 
 
-VecVecStr VecVecStr_with_capacity(usize cap) {
-    return (VecVecStr) {
-        .ptr = malloc(sizeof(VecStr) * cap),
-        .len = 0,
-        .cap = cap,
-    };
-}
-
-void VecVecStr_push(VecVecStr* self, VecStr value) {
-    if (0 == self->cap) {
-        self->cap = 1;
-        self->ptr = malloc(sizeof(*self->ptr) * self->cap);
-    } else if (self->cap == self->len) {
-        self->cap += self->cap / 2 + 1;
-        self->ptr = realloc(self->ptr, sizeof(*self->ptr) * self->cap);
-    }
-
-    self->ptr[self->len++] = value;
-}
-
-void VecVecStr_drop(VecVecStr* self) {
-    for (usize i = 0; i < self->len; ++i) {
-        VecStr_drop(self->ptr + i);
-    }
-
-    free(self->ptr);
-
-    self->len = 0;
-    self->cap = 0;
-}
-
-
-
 VecChar VecChar_with_capacity(usize cap) {
     return (VecChar) {
         .ptr = malloc(sizeof(char) * cap),
