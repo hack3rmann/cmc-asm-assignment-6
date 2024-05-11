@@ -13,22 +13,10 @@
 
 
 
-/// Smooth function f(x)
-typedef f32 (*SmoothFn)(f32);
-
-
-
 /// Linear interpilation for [`f32`]
 f32 f32_lerp(f32 left, f32 right, f32 mix) {
     return (1.0 - mix) * left + mix * right;
 }
-
-
-
-typedef enum DerivativesSign {
-    DerivativesSign_Same,
-    DerivativesSign_Different,
-} DerivativesSign;
 
 
 
@@ -37,7 +25,6 @@ typedef struct RootFindCfg {
     f32 eps;
     f32 segment_start;
     f32 segment_end;
-    DerivativesSign derivetives_sign;
 } RootFindCfg;
 
 #define RootFindCfg_DEFAULT ((RootFindCfg) { \
@@ -56,30 +43,32 @@ typedef struct Root {
 
 /// Estimates the root of the f(x) = g(x) equation.
 Root Root_of(
-    SmoothFn f, SmoothFn g, SmoothFn dfdx, SmoothFn dgdx, RootFindCfg const cfg
+    DiffFunc f, DiffFunc g, RootFindCfg const cfg
 ) {
     f32 a = cfg.segment_start;
     f32 b = cfg.segment_end;
     usize n_steps = 0;
 
-    while (fabs(a - b) >= cfg.eps) {
+    while (fabs(a - b) >= 2.0 * cfg.eps) {
         n_steps += 1;
 
-        f32 const funcs_diff_a = f(a) - g(a);
-        f32 const funcs_diff_b = f(b) - g(b);
-        f32 const primes_diff_a = dfdx(a) - dgdx(a);
-        f32 const primes_diff_b = dfdx(b) - dgdx(b);
+        f32 const funcs_diff_a = f.f(a) - g.f(a);
+        f32 const funcs_diff_b = f.f(b) - g.f(b);
+        f32 const primes_diff_a = f.dfdx(a) - g.dfdx(a);
+        f32 const primes_diff_b = f.dfdx(b) - g.dfdx(b);
+        f32 const primes2_diff_a = f.d2fdx2(a) - g.d2fdx2(a);
+        f32 const primes2_diff_b = f.d2fdx2(b) - g.d2fdx2(b);
 
-        switch (cfg.derivetives_sign) {
-        case DerivativesSign_Same: {
-            a -= (b - a) / (funcs_diff_b - funcs_diff_a) * funcs_diff_a;
-            b -= funcs_diff_b / primes_diff_b;
-        } break;
-
-        case DerivativesSign_Different: {
+        if (primes_diff_a * primes2_diff_a < 0.0) {
+            a -= funcs_diff_a * (a - b) / (funcs_diff_a - funcs_diff_b);
+        } else {
             a -= funcs_diff_a / primes_diff_a;
-            b -= (b - a) / (funcs_diff_b - funcs_diff_a) * funcs_diff_b;
-        } break;
+        }
+
+        if (primes_diff_b * primes2_diff_b < 0.0) {
+            b -= funcs_diff_b * (a - b) / (funcs_diff_a - funcs_diff_b);
+        } else {
+            b -= funcs_diff_b / primes2_diff_b;
         }
     }
 
@@ -91,7 +80,7 @@ Root Root_of(
 
 
 
-/// Integram esimator
+/// Integral esimator
 f32 estimate_integral(
     SmoothFn f, f32 segment_left, f32 segment_right, f32 dx
 ) {
@@ -191,34 +180,31 @@ i32 main(i32 argc, char** argv) {
     }
 
     Root const intersection_12
-        = Root_of(f1, f2, f1_prime, f2_prime, (RootFindCfg) {
+        = Root_of(diff_f1, diff_f2, (RootFindCfg) {
             .eps = f32_EPS,
             .segment_start = 6.0,
             .segment_end = 6.5,
-            .derivetives_sign = DerivativesSign_Different,
         });
     
     Root const intersection_23
-        = Root_of(f2, f3, f2_prime, f3_prime, (RootFindCfg) {
+        = Root_of(diff_f2, diff_f3, (RootFindCfg) {
             .eps = f32_EPS,
             .segment_start = 4.0,
             .segment_end = 4.5,
-            .derivetives_sign = DerivativesSign_Different,
         });
 
     Root const intersection_13
-        = Root_of(f1, f3, f1_prime, f3_prime, (RootFindCfg) {
+        = Root_of(diff_f1, diff_f3, (RootFindCfg) {
             .eps = f32_EPS,
             .segment_start = 2.1,
             .segment_end = 2.2,
-            .derivetives_sign = DerivativesSign_Same,
         });
 
     VecStr const* test_intersection_values
         = Args_get_flag_values(&args, &args_info, str("test-intersections"));
     
     if (null != test_intersection_values) {
-        assert(5 == test_intersection_values->len && "5 arguments expected\n");
+        assert(5 == test_intersection_values->len && "5 arguments expected");
 
         usize const f_index = usize_parse(test_intersection_values->ptr[0]) - 1;
         usize const g_index = usize_parse(test_intersection_values->ptr[1]) - 1;
@@ -229,22 +215,18 @@ i32 main(i32 argc, char** argv) {
         assert(f_index < 3
             && g_index < 3
             && f_index != g_index
-            && "F and G should be 1, 2, 3 and F != G\n");
+            && "F and G should be 1, 2, 3 and F != G");
         
-        assert(left <= right && "LEFT should be not greater than RIGHT\n");
+        assert(left <= right && "LEFT should be not greater than RIGH");
 
-        assert(eps > 0.0 && "EPS should be greater than zero\n");
+        assert(eps > 0.0 && "EPS should be greater than zero");
 
-        SmoothFn const functions[] = { f1, f2, f3 };
-        SmoothFn const derivatives[] = { f1_prime, f2_prime, f3_prime };
+        DiffFunc const functions[] = { diff_f1, diff_f2, diff_f3 };
 
         Root const root = Root_of(
             functions[f_index],
             functions[g_index],
-            derivatives[f_index],
-            derivatives[g_index],
             (RootFindCfg) {
-                .derivetives_sign = DerivativesSign_Same,
                 .eps = eps,
                 .segment_start = left,
                 .segment_end = right,
@@ -265,16 +247,16 @@ i32 main(i32 argc, char** argv) {
         = Args_get_flag_values(&args, &args_info, str("test-integration"));
     
     if (null != test_integration_values) {
-        assert(4 == test_integration_values->len && "4 arguments expected\n");
+        assert(4 == test_integration_values->len && "4 arguments expected");
 
         usize const f_index = usize_parse(test_integration_values->ptr[0]) - 1;
         f32 const left = f32_parse(test_integration_values->ptr[1]);
         f32 const right = f32_parse(test_integration_values->ptr[2]);
         f32 const eps = f32_parse(test_integration_values->ptr[3]);
 
-        assert(f_index < 3 && "F should be one of 1, 2, 3\n");
-        assert(left <= right && "LEFT should be not greater than RIGHT\n");
-        assert(eps > 0.0 && "EPS should be greater than zero\n");
+        assert(f_index < 3 && "F should be one of 1, 2, 3");
+        assert(left <= right && "LEFT should be not greater than RIGHT");
+        assert(eps > 0.0 && "EPS should be greater than zero");
 
         SmoothFn const functions[] = { f1, f2, f3 };
 
