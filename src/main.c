@@ -9,7 +9,7 @@
 #include "util.h"
 
 
-#define f32_EPS 1e-3
+#define f32_EPS 1e-6
 
 
 
@@ -272,10 +272,14 @@ i32 main(i32 argc, char** argv) {
     }
 
     if (Args_contains_flag(&args, &args_info, str("intersection"))) {
+        f32 const x12 = intersection_12.value;
+        f32 const x23 = intersection_23.value;
+        f32 const x13 = intersection_13.value;
+
         printf("Estimated functions intersections:\n");
-        printf("  f1 with f2: x = %f\n", intersection_12.value);
-        printf("  f2 with f3: x = %f\n", intersection_23.value);
-        printf("  f1 with f3: x = %f\n", intersection_13.value);
+        printf("  f1 with f2: x = %f, y = %f\n", x12, f2(x12));
+        printf("  f2 with f3: x = %f, y = %f\n", x23, f2(x23));
+        printf("  f1 with f3: x = %f, y = %f\n", x13, f3(x13));
     }
 
     if (Args_contains_flag(&args, &args_info, str("count"))) {
