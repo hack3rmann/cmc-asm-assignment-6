@@ -1,19 +1,6 @@
-OS := $(shell uname)
-LINUX = Linux
-WINDOWS = Windows
-
 ASM_FILES = src/functions.asm
 C_FILES = src/main.c src/args.c src/string.c src/vec.c src/util.c
-
-ifeq ($(OS),$(LINUX))
-	EXECUTABLE_NAME = integrator
-	NASM_SYSTEM = elf32
-endif
-ifeq ($(OS),$(WINDOWS))
-	EXECUTABLE_NAME = integrator.exe
-	NASM_SYTEM = win32
-endif
-
+EXECUTABLE_NAME = integrator
 
 
 target:
@@ -25,7 +12,7 @@ compile_asm: target $(ASM_FILES)
 		file,\
 		$(ASM_FILES),\
 		$(shell nasm \
-			-f $(NASM_SYSTEM) \
+			-f elf32 \
 			$(file) \
 			-o $(addprefix target/,$(call path_to_name,$(file)).obj)))
 	
