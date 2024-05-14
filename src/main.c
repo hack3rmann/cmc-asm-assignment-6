@@ -9,7 +9,7 @@
 #include "util.h"
 
 
-#define f32_EPS 1e-6
+#define f32_EPS 1e-3
 
 
 
